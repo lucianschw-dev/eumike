@@ -1,0 +1,13 @@
+{
+  "head": { "vars": ["work", "celex", "title", "date"] },
+  "results": {
+    "bindings": [
+      {
+        "work": { "type": "uri", "value": "http://publications.europa.eu/resource/cellar/abc-1" },
+        "celex": { "type": "literal", "value": "32016R0679" },
+        "title": { "type": "literal", "value": "Regulation (EU) 2016/679 of the European Parliament and of the Council (General Data Protection Regulation)" },
+        "date": { "type": "literal", "value": "2016-04-27" }
+      }
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "head": { "vars": ["work", "celex", "ecli", "title", "date"] },
+  "results": {
+    "bindings": [
+      {
+        "work": { "type": "uri", "value": "http://publications.europa.eu/resource/cellar/schrems-ii" },
+        "celex": { "type": "literal", "value": "62018CJ0311" },
+        "ecli": { "type": "literal", "value": "ECLI:EU:C:2020:559" },
+        "title": { "type": "literal", "value": "Judgment of the Court (Grand Chamber) of 16 July 2020. Data Protection Commissioner v Facebook Ireland Ltd and Maximillian Schrems. Case C-311/18." },
+        "date": { "type": "literal", "value": "2020-07-16" }
+      },
+      {
+        "work": { "type": "uri", "value": "http://publications.europa.eu/resource/cellar/consumer-2024" },
+        "celex": { "type": "literal", "value": "62022CJ0456" },
+        "ecli": { "type": "literal", "value": "ECLI:EU:C:2024:123" },
+        "title": { "type": "literal", "value": "Judgment on consumer protection 2024" },
+        "date": { "type": "literal", "value": "2024-02-15" }
+      }
+    ]
+  }
+}
