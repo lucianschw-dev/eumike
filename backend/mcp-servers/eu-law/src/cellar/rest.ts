@@ -1,23 +1,23 @@
-// CELLAR REST API client.
+// EUR-Lex / CELLAR REST client.
 //
-// Endpoint family: https://publications.europa.eu/resource/celex/{CELEX}
-//                  https://publications.europa.eu/resource/ecli/{ECLI}
-//                  https://publications.europa.eu/resource/eli/{ELI-path}
+// We use eur-lex.europa.eu's legal-content endpoint, which is the same URL
+// users see when they click through to a document. It returns HTML and is
+// content-negotiated by language via the URL path (`/EN/TXT/HTML/...`,
+// `/FR/TXT/HTML/...`, etc.).
 //
-// Content negotiation:
-//   - `Accept` selects the format (HTML, XML, PDF, …).
-//   - `Accept-Language` selects the language manifestation (3-letter code).
-//
-// CELLAR returns 300 Multiple Choices when multiple language manifestations
-// match; in that case the body contains an alternates list. For simplicity
-// we re-issue with a more specific Accept-Language.
+// Why not the publications.europa.eu CELLAR resource endpoint?
+//   - CELLAR's resource URLs (https://publications.europa.eu/resource/celex/...)
+//     return 300 Multiple Choices and require complex Accept-Language
+//     content-negotiation to reach a usable manifestation.
+//   - eur-lex.europa.eu's legal-content endpoint is the canonical user-facing
+//     URL anyway — using it means our `sourceUrl` is identical to what we
+//     would link the user to.
 
 import * as cheerio from "cheerio";
 import { fetchThrottled } from "../util/throttle";
 import {
     DEFAULT_LANGUAGE,
     FALLBACK_CHAIN,
-    LANG_2_TO_3,
     normaliseLanguage,
     type EuLanguage,
 } from "../util/lang";
@@ -35,8 +35,9 @@ export async function fetchDocumentByCelex(
 ): Promise<DocumentResult> {
     const lang = normaliseLanguage(args.language);
     const format = args.format ?? "text";
-    const { html, resolvedLang } = await fetchHtmlWithFallback(
-        `https://publications.europa.eu/resource/celex/${encodeURIComponent(args.celex)}`,
+
+    const { html, resolvedLang, sourceUrl } = await fetchHtmlWithFallback(
+        (l) => buildEurLexHtmlUrl(args.celex, l),
         lang,
     );
 
@@ -47,7 +48,7 @@ export async function fetchDocumentByCelex(
         body,
         bodyFormat: format,
         language: resolvedLang,
-        sourceUrl: buildEurLexUrl(args.celex, resolvedLang.toUpperCase()),
+        sourceUrl,
         metadata: {},
     };
 }
@@ -63,20 +64,23 @@ export async function fetchDocumentByEcli(
 ): Promise<DocumentResult> {
     const lang = normaliseLanguage(args.language);
     const format = args.format ?? "text";
-    const { html, resolvedLang } = await fetchHtmlWithFallback(
-        `https://publications.europa.eu/resource/ecli/${encodeURIComponent(args.ecli)}`,
+
+    // EUR-Lex accepts ECLIs directly as a URI parameter.
+    const { html, resolvedLang, sourceUrl } = await fetchHtmlWithFallback(
+        (l) =>
+            `https://eur-lex.europa.eu/legal-content/${l.toUpperCase()}/TXT/HTML/?uri=ECLI:${encodeURIComponent(args.ecli)}`,
         lang,
     );
 
     const { title, body } = extractContent(html, format);
     return {
-        celex: "", // populated by the tool layer if it has run an ECLI→CELEX resolve
+        celex: "",
         ecli: args.ecli,
         title: title || `Case ${args.ecli}`,
         body,
         bodyFormat: format,
         language: resolvedLang,
-        sourceUrl: `https://eur-lex.europa.eu/legal-content/${resolvedLang.toUpperCase()}/TXT/?qid=&uri=ECLI:${encodeURIComponent(args.ecli)}`,
+        sourceUrl,
         metadata: {},
     };
 }
@@ -92,8 +96,11 @@ export async function fetchDocumentByEli(
 ): Promise<DocumentResult> {
     const lang = normaliseLanguage(args.language);
     const format = args.format ?? "text";
-    // ELI URIs come in their own URL form already — pass directly.
-    const { html, resolvedLang } = await fetchHtmlWithFallback(args.eli, lang);
+    // ELI URIs are themselves dereferenceable URLs — fetch them directly.
+    const { html, resolvedLang, sourceUrl } = await fetchHtmlWithFallback(
+        () => args.eli,
+        lang,
+    );
 
     const { title, body } = extractContent(html, format);
     return {
@@ -103,42 +110,53 @@ export async function fetchDocumentByEli(
         body,
         bodyFormat: format,
         language: resolvedLang,
-        sourceUrl: args.eli,
+        sourceUrl,
         metadata: {},
     };
 }
 
+function buildEurLexHtmlUrl(celex: string, lang: EuLanguage): string {
+    return `https://eur-lex.europa.eu/legal-content/${lang.toUpperCase()}/TXT/HTML/?uri=CELEX:${encodeURIComponent(celex)}`;
+}
+
 async function fetchHtmlWithFallback(
-    url: string,
+    urlBuilder: (lang: EuLanguage) => string,
     preferred: EuLanguage,
-): Promise<{ html: string; resolvedLang: EuLanguage }> {
+): Promise<{ html: string; resolvedLang: EuLanguage; sourceUrl: string }> {
     const tryOrder: EuLanguage[] = [
         preferred,
         ...FALLBACK_CHAIN.filter((l) => l !== preferred),
     ];
 
-    let last: { status: number; body: string } | null = null;
+    let last: { status: number; body: string; url: string } | null = null;
     for (const lang of tryOrder) {
+        const url = urlBuilder(lang);
         const res = await fetchThrottled(url, {
             headers: {
-                Accept: "application/xhtml+xml; notice=object, application/xhtml+xml, text/html",
-                "Accept-Language": LANG_2_TO_3[lang],
+                Accept: "text/html, application/xhtml+xml",
+                "Accept-Language": lang,
             },
         });
-        last = { status: res.status, body: res.body };
-        if (res.status >= 200 && res.status < 300 && res.body.trim().length > 0) {
-            return { html: res.body, resolvedLang: lang };
+        last = { status: res.status, body: res.body, url };
+        if (
+            res.status >= 200 &&
+            res.status < 300 &&
+            res.body.trim().length > 0 &&
+            // EUR-Lex returns a 200 with a "document not found" page for
+            // unknown CELEX numbers. We detect that by looking for a marker
+            // string that appears on error pages but not real documents.
+            !res.body.includes("The requested document does not exist") &&
+            !res.body.includes("No documents matching")
+        ) {
+            return { html: res.body, resolvedLang: lang, sourceUrl: url };
         }
     }
 
     throw new Error(
-        `CELLAR fetch failed for ${url}: last status ${last?.status ?? "unknown"}`,
+        `EUR-Lex fetch failed: last status ${last?.status ?? "unknown"} at ${last?.url ?? "unknown URL"}`,
     );
 }
 
-// Strip scripts/styles, keep paragraphs/headings. The CELLAR HTML payloads
-// are XHTML with a mix of structural and metadata markup; for "text" mode we
-// concatenate visible text, for "html" we return a lightly-sanitised HTML.
 function extractContent(
     html: string,
     format: "html" | "text",
@@ -152,19 +170,16 @@ function extractContent(
     }
 
     if (format === "html") {
-        // Return body innerHTML if present, otherwise the full doc.
         const bodyHtml = $("body").html();
         return { title, body: (bodyHtml ?? html).trim() };
     }
 
-    // Text mode: collapse whitespace, separate block elements with newlines.
     $("br").replaceWith("\n");
     const text = $("body").text() || $.root().text();
     const cleaned = text.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
     return { title, body: cleaned };
 }
 
-// Used by the case-law search post-processor to build a richer hit object.
 export function celexToEurLexUrl(celex: string, lang: EuLanguage = DEFAULT_LANGUAGE): string {
     return buildEurLexUrl(celex, lang.toUpperCase());
 }

@@ -9,7 +9,7 @@ const fixtureHtml = readFileSync(
     "utf-8",
 );
 
-describe("CELLAR REST fetcher", () => {
+describe("EUR-Lex REST fetcher", () => {
     beforeEach(() => {
         _clearCachesForTests();
     });
@@ -21,7 +21,7 @@ describe("CELLAR REST fetcher", () => {
         const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
             new Response(fixtureHtml, {
                 status: 200,
-                headers: { "Content-Type": "application/xhtml+xml" },
+                headers: { "Content-Type": "text/html" },
             }),
         );
 
@@ -39,13 +39,16 @@ describe("CELLAR REST fetcher", () => {
         expect(doc.sourceUrl).toContain("32016R0679");
     });
 
-    it("falls back to English when requested language returns no body", async () => {
+    it("falls back to English when requested language returns the 'not found' page", async () => {
         let calls = 0;
         vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
             calls++;
             if (calls === 1) {
-                // First call (requested lang = Maltese) → empty body
-                return new Response("", { status: 200 });
+                // First call (requested lang = Maltese) → EUR-Lex error page
+                return new Response(
+                    "<html><body>The requested document does not exist in the language requested.</body></html>",
+                    { status: 200 },
+                );
             }
             return new Response(fixtureHtml, { status: 200 });
         });
@@ -56,7 +59,6 @@ describe("CELLAR REST fetcher", () => {
             format: "text",
         });
         expect(doc.body).toContain("General Data Protection Regulation");
-        // First attempt was mt; fallback chain starts at en.
         expect(calls).toBeGreaterThanOrEqual(2);
     });
 
@@ -69,7 +71,6 @@ describe("CELLAR REST fetcher", () => {
             format: "html",
         });
         expect(doc.bodyFormat).toBe("html");
-        // Body should contain HTML tags in this mode.
         expect(doc.body).toMatch(/<h1|<p/);
     });
 });
