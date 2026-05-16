@@ -46,7 +46,7 @@ describe("searchCaseLaw tool", () => {
         expect(schrems).toBeDefined();
         expect(schrems?.ecli).toBe("ECLI:EU:C:2020:559");
         expect(schrems?.eurlexUrl).toContain("CELEX:62018CJ0311");
-        expect(schrems?.curiaUrl).toContain("ECLI:EU:C:2020:559");
+           expect(decodeURIComponent(schrems?.curiaUrl ?? "")).toContain("ECLI:EU:C:2020:559");
     });
 
     it("validates input — empty query is rejected by the zod schema", async () => {

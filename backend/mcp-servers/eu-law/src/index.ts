@@ -61,12 +61,12 @@ export function buildMcpServer(): McpServer {
                 "Returns up to 50 hits with CELEX number, title, date, and a EUR-Lex link. " +
                 "Use sector=1 to search treaties instead. Always call eu_get_document_by_celex " +
                 "before quoting or summarising the content.",
-            inputSchema: searchLegislationSchema.shape,
+            inputSchema: searchLegislationSchema.shape as any,
         },
-        async (args) => {
+        (async (args: any) => {
             const result = await runSearchLegislation(args);
             return { content: [{ type: "text", text: JSON.stringify(result) }] };
-        },
+        }) as any,
     );
 
     server.registerTool(
@@ -76,12 +76,12 @@ export function buildMcpServer(): McpServer {
                 "Search CJEU and General Court case law by keyword. Filter by court " +
                 "(ECJ = Court of Justice, GC = General Court, any = both). Returns CELEX, " +
                 "ECLI, case title, date, and links to EUR-Lex and curia.europa.eu.",
-            inputSchema: searchCaseLawSchema.shape,
+            inputSchema: searchCaseLawSchema.shape as any,
         },
-        async (args) => {
+        (async (args: any) => {
             const result = await runSearchCaseLaw(args);
             return { content: [{ type: "text", text: JSON.stringify(result) }] };
-        },
+        }) as any,
     );
 
     server.registerTool(
@@ -90,12 +90,12 @@ export function buildMcpServer(): McpServer {
             description:
                 "Search EU primary law: TEU, TFEU, Charter of Fundamental Rights, " +
                 "protocols, and accession acts. Returns the same shape as eu_search_legislation.",
-            inputSchema: searchTreatiesSchema.shape,
+            inputSchema: searchTreatiesSchema.shape as any,
         },
-        async (args) => {
+        (async (args: any) => {
             const result = await runSearchTreaties(args);
             return { content: [{ type: "text", text: JSON.stringify(result) }] };
-        },
+        }) as any,
     );
 
     server.registerTool(
@@ -106,12 +106,12 @@ export function buildMcpServer(): McpServer {
                 "(e.g. 32016R0679 for the GDPR, 62018CJ0311 for Schrems II). " +
                 "Returns title, body text, and a EUR-Lex source URL. Use format='text' " +
                 "for clean plain text, 'html' for the raw structured document.",
-            inputSchema: getDocumentByCelexSchema.shape,
+            inputSchema: getDocumentByCelexSchema.shape as any,
         },
-        async (args) => {
+        (async (args: any) => {
             const result = await runGetDocumentByCelex(args);
             return { content: [{ type: "text", text: JSON.stringify(result) }] };
-        },
+        }) as any,
     );
 
     server.registerTool(
@@ -120,12 +120,12 @@ export function buildMcpServer(): McpServer {
             description:
                 "Fetch a CJEU/GC judgment by its ECLI (e.g. ECLI:EU:C:2020:559 for Schrems II). " +
                 "Internally resolves ECLI to CELEX so the returned object carries both identifiers.",
-            inputSchema: getDocumentByEcliSchema.shape,
+            inputSchema: getDocumentByEcliSchema.shape as any
         },
-        async (args) => {
+        (async (args: any) => {
             const result = await runGetDocumentByEcli(args);
             return { content: [{ type: "text", text: JSON.stringify(result) }] };
-        },
+        }) as any,
     );
 
     server.registerTool(
@@ -134,12 +134,12 @@ export function buildMcpServer(): McpServer {
             description:
                 "Fetch an EU act by its ELI URL (European Legislation Identifier), e.g. " +
                 "http://data.europa.eu/eli/reg/2016/679/oj for the GDPR.",
-            inputSchema: getDocumentByEliSchema.shape,
+            inputSchema: getDocumentByEliSchema.shape as any
         },
-        async (args) => {
+        (async (args: any) => {
             const result = await runGetDocumentByEli(args);
             return { content: [{ type: "text", text: JSON.stringify(result) }] };
-        },
+        }) as any,
     );
 
     server.registerTool(
@@ -150,12 +150,12 @@ export function buildMcpServer(): McpServer {
                 "'ECLI:EU:C:2020:559') into canonical identifiers (CELEX, ECLI, title). " +
                 "Returns a confidence score; call this before relying on any user-supplied " +
                 "citation, and before citing your own results.",
-            inputSchema: verifyCitationSchema.shape,
+            inputSchema: verifyCitationSchema.shape as any,
         },
-        async (args) => {
+        (async (args: any) => {
             const result = await runVerifyCitation(args);
             return { content: [{ type: "text", text: JSON.stringify(result) }] };
-        },
+        }) as any,
     );
 
     return server;

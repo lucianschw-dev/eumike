@@ -5,8 +5,8 @@
 //   ECLI format:  https://e-justice.europa.eu/175/EN/european_case_law_identifier_ecli
 //   ELI format:   https://eur-lex.europa.eu/eli-register/about.html
 //
-// CELEX structure (10–13 characters):
-//   sector(1) | year(4) | descriptor(1–2) | natural-number(4)
+// CELEX structure (10-13 characters):
+//   sector(1) | year(4) | descriptor(1-2) | natural-number(4)
 //   e.g. 32016R0679 = sector 3 (legislation), 2016, Regulation (R), no. 0679
 //   e.g. 62018CJ0311 = sector 6 (case-law), 2018, judgment ECJ (CJ), no. 0311
 //
@@ -23,7 +23,7 @@ const ECLI_REGEX = /^ECLI:([A-Z]{2,8}):([A-Z0-9]{1,7}):(\d{4}):([A-Z0-9.]{1,25})
 export type CelexParts = {
     sector: CelexSector;
     year: number;
-    descriptor: string; // R = Regulation, L = Directive, D = Decision, CJ = ECJ judgment, …
+    descriptor: string; // R = Regulation, L = Directive, D = Decision, CJ = ECJ judgment, ...
     number: string;     // 4-digit string, preserves leading zeros
 };
 
@@ -69,12 +69,13 @@ export function isEcli(raw: string): boolean {
 }
 
 // ELI URLs look like: http://data.europa.eu/eli/reg/2016/679/oj
-// We accept the canonical form and the legacy form with `eli.eli.eli` typos.
+// The ELI spec also allows 2-digit years for pre-2000 acts
+// (e.g. /eli/dir/95/46 = Directive 95/46/EC of 1995).
 const ELI_REGEX =
-    /^https?:\/\/(?:data\.europa\.eu|eur-lex\.europa\.eu)\/eli\/([a-z_]+)\/(\d{4})\/(\d+)(?:\/[^?#]*)?$/i;
+    /^https?:\/\/(?:data\.europa\.eu|eur-lex\.europa\.eu)\/eli\/([a-z_]+)\/(\d{2,4})\/(\d+)(?:\/[^?#]*)?$/i;
 
 export type EliParts = {
-    type: string;   // reg, dir, dec, …
+    type: string;   // reg, dir, dec, ...
     year: number;
     number: number;
 };
@@ -82,9 +83,14 @@ export type EliParts = {
 export function parseEli(raw: string): EliParts | null {
     const m = ELI_REGEX.exec(raw.trim());
     if (!m) return null;
+    // Two-digit years follow the EU's pre-2000 convention (e.g. /95/ = 1995).
+    let year = parseInt(m[2], 10);
+    if (m[2].length === 2) {
+        year = year < 50 ? 2000 + year : 1900 + year;
+    }
     return {
         type: m[1].toLowerCase(),
-        year: parseInt(m[2], 10),
+        year,
         number: parseInt(m[3], 10),
     };
 }
