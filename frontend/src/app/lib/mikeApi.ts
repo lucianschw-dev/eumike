@@ -501,7 +501,10 @@ export async function streamChat(payload: {
 }): Promise<Response> {
     const { signal, ...body } = payload;
     const authHeaders = await getAuthHeader();
-    return fetch(`${API_BASE}/chat`, {
+    // Route through /eu-law-chat to enable the EU-law tools and system prompt.
+    // Chat management endpoints (create, list, fetch, rename, delete) still
+    // use /chat so all chats remain in a single list regardless of mode.
+    return fetch(`${API_BASE}/eu-law-chat`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
