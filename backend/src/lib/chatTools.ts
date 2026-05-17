@@ -2718,6 +2718,19 @@ export async function runLLMStream(params: {
     db: ReturnType<typeof createServerSupabase>;
     write: (s: string) => void;
     extraTools?: unknown[];
+    /**
+     * Optional MCP-style tool dispatcher. If provided, tool calls whose
+     * name appears in `mcpTools.names` are routed to `mcpTools.dispatch`
+     * instead of Mike's built-in runToolCalls. Returns one result per call,
+     * keyed by tool_call_id. Used by eu-law-chat to call our external MCP
+     * server.
+     */
+    mcpTools?: {
+        names: string[];
+        dispatch: (
+            calls: { id: string; name: string; input: Record<string, unknown> }[],
+        ) => Promise<{ tool_call_id: string; content: string }[]>;
+    };
     workflowStore?: WorkflowStore;
     tabularStore?: TabularCellStore;
     buildCitations?: (fullText: string) => unknown[];
@@ -2738,6 +2751,7 @@ export async function runLLMStream(params: {
         db,
         write,
         extraTools,
+        mcpTools,
         workflowStore,
         tabularStore,
         buildCitations,
@@ -2887,6 +2901,41 @@ export async function runLLMStream(params: {
                     arguments: JSON.stringify(c.input),
                 },
             }));
+
+            // ── MCP tools fast path ──
+            // If the caller registered MCP tool names, split the calls:
+            // dispatch MCP calls to the external server, let the rest fall
+            // through to Mike's runToolCalls below. Their results are
+            // merged into the resultByCallId map at the end of this block
+            // so the final return picks them up uniformly.
+            const mcpResults: { tool_call_id: string; content: string }[] = [];
+            let dispatchedToolCalls: ToolCall[] = toolCalls;
+            if (mcpTools && mcpTools.names.length) {
+                const mcpSet = new Set(mcpTools.names);
+                const mcpCalls = calls.filter((c) => mcpSet.has(c.name));
+                dispatchedToolCalls = toolCalls.filter(
+                    (tc) => !mcpSet.has(tc.function.name),
+                );
+                if (mcpCalls.length) {
+                    try {
+                        const results = await mcpTools.dispatch(mcpCalls);
+                        mcpResults.push(...results);
+                    } catch (err) {
+                        for (const c of mcpCalls) {
+                            mcpResults.push({
+                                tool_call_id: c.id,
+                                content: JSON.stringify({
+                                    error:
+                                        err instanceof Error
+                                            ? err.message
+                                            : String(err),
+                                }),
+                            });
+                        }
+                    }
+                }
+            }
+
             const {
                 toolResults,
                 docsRead,
@@ -2896,7 +2945,7 @@ export async function runLLMStream(params: {
                 workflowsApplied,
                 docsEdited,
             } = await runToolCalls(
-                toolCalls,
+                dispatchedToolCalls,
                 docStore,
                 userId,
                 db,
@@ -2969,6 +3018,9 @@ export async function runLLMStream(params: {
             for (const r of toolResults) {
                 const row = r as { tool_call_id: string; content?: unknown };
                 resultByCallId.set(row.tool_call_id, String(row.content ?? ""));
+            }
+            for (const r of mcpResults) {
+                resultByCallId.set(r.tool_call_id, r.content);
             }
             return toolCalls.map((c) => ({
                 tool_use_id: c.id,
